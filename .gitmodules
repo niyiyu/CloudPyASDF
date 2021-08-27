@@ -1,0 +1,3 @@
+[submodule "sliderule"]
+	path = sliderule
+	url = https://github.com/ICESat2-SlideRule/sliderule
