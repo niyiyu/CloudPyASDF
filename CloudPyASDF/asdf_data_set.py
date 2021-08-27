@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-:copyright:
-    Yiyu Ni (niyiyu@uw.edu), 2021
-:license:
-    MIT License
-"""
+#
+# Copyright
+#    Yiyu Ni (niyiyu@uw.edu), 2021
+# License
+#    MIT License
 
-# import sliderule
+try:
+    import sliderule
+except:
+    print("Check sliderule python-binding as it is not imported.")
+
 import numpy as np
 import h5py
 import obspy

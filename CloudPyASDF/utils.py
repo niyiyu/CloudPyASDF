@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-:copyright:
-    Yiyu Ni (niyiyu@uw.edu), 2021
-:license:
-    MIT License
-"""
+#
+# Copyright
+#    Yiyu Ni (niyiyu@uw.edu), 2021
+# License
+#    MIT License
 
 import h5py
 import xarray
@@ -37,37 +36,39 @@ def gen_group_dict(group):
 
 
 
-def dump_group_dict(group, name):
+def dump_group_dict(from_group, to_group, name, compress = True):
     '''
         Traverse a group, and store a dictionary in the group that describe 
         the group's structure.
+
+        Compression is done by default as when gzip is used (LZW algorithm), 
+        the string could be dramatically shortened. This is especially useful
+        for file with small trace/network/station name heterogenity.
         
         Args:
-            group (h5py._hl.group.Group): hdf5 group to store xarray dataset
-            name (str): dataset name taht store the dictionary.
+            from_group (h5py._hl.group.Group): from which group the dict is dumped
+            to_group (h5py._hl.group.Group): to where the dict is stored
+            name (str): dataset name taht store the dictionary
+            compress (bool): decide whether to compress string
     '''
+    import gzip
 
     # Check argument type...
-    assert isinstance(group, h5py._hl.group.Group), \
-        "Expect " + str(h5py._hl.group.Group) + "\n\t\tGet " + str(type(group))
+    for _g in [from_group, to_group]:
+        assert isinstance(_g, h5py._hl.group.Group), \
+            "Expect " + str(h5py._hl.group.Group) + "\n\t\tGet " + str(type(_g))
     
-    dic = gen_group_dict(group)
-    group.create_dataset(name, 
-        data = np.fromstring(str(dic), dtype = 'int8'),
-        maxshape = (None, ))
+    s = str(gen_group_dict(from_group)).encode()
 
-
-
-def _read_string_array(data):
-    """
-        Helper function taking a string data and preparing it so it can be
-        read to other object.
-
-        As string array are stored as ASCII-int in HDF5, decode is required.
-
-        data (numpy.array): data array that encodes a string
-    """
-    return data[()].tobytes().strip()
+    if compress:
+        comp_s = gzip.compress(s)
+        to_group.create_dataset(name, 
+            data = np.frombuffer(comp_s, dtype = 'uint8'),
+            maxshape = (None, ))
+    else:    
+        to_group.create_dataset(name, 
+            data = np.frombuffer(s, dtype = 'uint8'),
+            maxshape = (None, ))
 
 
 
@@ -80,15 +81,26 @@ def read_dict(h5file, path):
             path (str): a hdf5 dataset path, looks like "/group/subgroup/dataset"
 
         Return:
-            _dic (dict): the dictionary tht describe the group's strcuture.
+            dic (dict): the dictionary tht describe the group's strcuture.
     """
+    import gzip
     from numpy import array as array
     from numpy import float32 as float32
 
     _str = h5file.read(path)
-    _str = np.array(_str, dtype = 'int8')
-    _dic = eval(_read_string_array(_str))
-    return _dic
+    _str = np.array(_str, dtype = 'uint8')
+    _str_byte = _read_string_array(_str)
+
+    try:
+        # Decompress string
+        _str_byte = gzip.decompress(_str_byte)
+    except:
+        # Perhaps compression is surpressed?
+        pass
+
+    dic = eval(_str_byte)
+    
+    return dic
 
 
 
@@ -103,6 +115,9 @@ def readp_dict(h5file, readp_list, prefix = '', suffix = ''):
             suffix (str): global suffix for readp_list's path
 
     """
+    # For some modules like xarray, it just don't show full name of arrays and data type.
+    # This is required to avoid eval error.
+    import gzip
     from numpy import array as array
     from numpy import float32 as float32
 
@@ -110,14 +125,20 @@ def readp_dict(h5file, readp_list, prefix = '', suffix = ''):
     _readp_list = [[i[0] + suffix, i[1], i[2], i[3]] for i in _readp_list]
     _dict = h5file.readp(_readp_list)
     
-    _new_dict = {}
+    new_dict = {}
     for item in readp_list:
-        _new_dict[item[0]] = \
-            eval(_read_string_array(np.array(
-                _dict[prefix + item[0] + suffix], dtype = 'int8')))
+        _str = np.array(_dict[prefix + item[0] + suffix], dtype = 'uint8')
+        _str_byte = _read_string_array(_str)
 
-    return _new_dict
+        try:
+            # Decompress string
+            _str_byte = gzip.decompress(_str_byte)
+        except:
+            # Perhaps compression is surpressed?
+            pass
 
+        new_dict[item[0]] = eval(_str_byte)
+    return new_dict
 
 
 
@@ -140,3 +161,22 @@ def readp_array(h5file, readp_list, prefix = '', suffix = ''):
         _new_dict[item[0]] = _dict[prefix + item[0] + suffix]
 
     return _new_dict
+
+
+
+def _read_string_array(array):
+    """
+        Helper function taking a string data and preparing it so it can be
+        read to other object.
+
+        As string array are stored as ASCII-int in HDF5, decode is required.
+
+        data (numpy.array): data array that encodes a string
+
+        Args:
+            array (numpy.array):
+        
+        Returns:
+            bytes (bytes):
+    """
+    return array[()].tobytes().strip()
