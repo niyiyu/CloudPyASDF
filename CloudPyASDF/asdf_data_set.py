@@ -17,6 +17,10 @@ import obspy
 import datetime
 import io
 
+from .utils import (
+    read_dict
+)
+
 class CloudASDFDataSet(object):
     def __init__(self, resource, format, path, region = "us-west-2", endpoint = "https://s3.us-west-2.amazonaws.com"):
         '''
@@ -89,18 +93,17 @@ class CloudASDFDataSet(object):
 
 
 
-    def get_asdfdict(self):
+    def read_asdfdict(self, path = "/AuxiliaryData/ASDFDict"):
         '''
             Get ASDF dictionary that describes the file structure.
 
             Args:
-                None
+                path (str): default asdf dictionary is stored in /AuxiliaryData/ASDFDict
             
             Returns:
                 dict: ASDF dictionary object that describe H5 structure.
         '''
-        _string = self._file.read("/AuxiliaryData/ASDFDict", 0, 0, -1)
-        self.ASDFDict = eval(np.array(_string, dtype = 'int8')[()].tobytes().strip().decode("utf-8"))
+        self.ASDFDict = read_dict(self._file, path)
         return self.ASDFDict
 
     
@@ -124,7 +127,7 @@ class CloudASDFDataSet(object):
 
 
 def traverse_dataset(cloudasdfdataset):
-    asdfdict = cloudasdfdataset.get_asdfdict()
+    asdfdict = cloudasdfdataset.read_asdfdict()
     stations = asdfdict['Waveforms'].keys()
     for sta in stations:
         for tag in asdfdict['Waveforms'][sta]:
