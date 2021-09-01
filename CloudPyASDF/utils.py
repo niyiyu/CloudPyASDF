@@ -36,7 +36,7 @@ def gen_group_dict(group):
 
 
 
-def dump_group_dict(from_group, to_group, name, compress = True):
+def dump_dict(from_group, to_group, name = "dict", compress = True):
     '''
         Traverse a group, and store a dictionary in the group that describe 
         the group's structure.
