@@ -10,6 +10,14 @@ import h5py
 import xarray
 import numpy as np
 import weakref
+import obspy
+import io
+
+
+from .exceptions import (
+    WaveformNotInFileException
+)
+from .inventory_utils import get_coordinates
 
 def gen_group_dict(group):
     '''
@@ -103,8 +111,6 @@ def read_dict(h5file, path):
     
     return dic
 
-
-
 def readp_dict(h5file, readp_list, prefix = '', suffix = ''):
     """
         Read and decode into dictionary from HDF5 file with h5coro in multi-thread.
@@ -141,8 +147,6 @@ def readp_dict(h5file, readp_list, prefix = '', suffix = ''):
         new_dict[item[0]] = eval(_str_byte)
     return new_dict
 
-
-
 def readp_array(h5file, readp_list, prefix = '', suffix = ''):
     """
         Read and decode into array from HDF5 file with h5coro in multi-thread.
@@ -163,8 +167,6 @@ def readp_array(h5file, readp_list, prefix = '', suffix = ''):
 
     return _new_dict
 
-
-
 def _read_string_array(array):
     """
         Helper function taking a string data and preparing it so it can be
@@ -181,7 +183,6 @@ def _read_string_array(array):
             bytes (bytes):
     """
     return array[()].tobytes().strip()
-
 
 
 
@@ -254,14 +255,6 @@ class WaveformAccessor(object):
         self.data_set = weakref.ref(data_set)
         self.waveform_dict = self.data_set().ASDFDict['Waveforms'][station_name]
 
-    def list(self):
-        """
-            Get a list of all data sets for this station.
-        """
-        return sorted(
-            self.waveform_dict.keys()
-        )
-
     def get_waveform_tags(self):
         """
             Get all available waveform tags for this station.
@@ -270,13 +263,95 @@ class WaveformAccessor(object):
             set(_i.split("__")[-1] for _i in self.list() if _i != "StationXML")
         )
 
+    @property
+    def coordinates(self):
+        """
+            Get coordinates of the station if any.
+        """
+        coords = self.__get_coordinates(level = "station")
+        # Such a file actually cannot be created with pyasdf but maybe with
+        # other codes. Thus we skip the coverage here.
+        if self.station_name not in coords:  # pragma: no cover
+            raise ASDFValueError(
+                "StationXML file has no coordinates for "
+                "station '%s'." % self.station_name
+            )
+        return coords[self.station_name]
+
+    @property
+    def channel_coordinates(self):
+        """
+            Get coordinates of the station at the channel level if any.
+        """
+        coords = self.__get_coordinates(level = "channel")
+        # Filter to only keep channels with the current station name.
+        coords = {
+            key: value
+            for key, value in coords.items()
+            if key.startswith(self.station_name + ".")
+        }
+        if not coords:
+            raise ASDFValueError(
+                "StationXML file has no coordinates at "
+                "the channel level for station '%s'." % self.station_name
+            )
+        return coords
+    
+    def __get_coordinates(self, level):
+        """
+            Helper function.
+        """
+        if "StationXML" not in self.waveform_dict:
+            raise NoStationXMLForStation(
+                "Station '%s' has no StationXML " "file." % self.station_name
+            )
+        try:
+            with io.BytesIO(self.data_set().read_stationxml(
+                "/Waveforms/" + self.station_name + "/StationXML", True
+            )) as buf:
+                coordinates = get_coordinates(buf, level = level)
+        finally:
+            pass
+
+        return coordinates
+
     def __getattr__(self, item):
         return self.get_item(item = item)
 
-    def get_item(self, item, starttime = None, endtime = None):
-        # items = self.__filter_data(item)
+    def __filter_data(self, item):
+        """
+            Internal filtering for item access and deletion.
+        """
         # StationXML access.
         if item == "StationXML":
+            return [item]
+
+        _l = self.list()
+
+        # Single trace access
+        # items would be something looks like 
+        # 'UW.OSD..EHZ__2021-01-01T00:00:00__2021-01-01T01:00:00__raw_recording'
+        if item in _l:
+            return [item]
+
+        # Tag access. '__' is always contained in a trace's name.
+        elif "__" not in item:
+            keys = [_i for _i in self.list() if _i.endswith("__" + item)]
+
+            if not keys:
+                raise WaveformNotInFileException(
+                    "Tag '%s' not part of the data set for station '%s'."
+                    % (item, self.station_name)
+                )
+            return keys
+
+        raise AttributeError("Item '%s' not found." % item)
+
+
+    def get_item(self, item, starttime = None, endtime = None):
+        items = self.__filter_data(item)
+        # StationXML access.
+        if items == ["StationXML"]:
             station = self.data_set().read_stationxml("/Waveforms/%s/StationXML" % self.station_name)
             if station is None:
                 raise AttributeError(
@@ -284,6 +359,50 @@ class WaveformAccessor(object):
                     % (self.__class__.__name__, str(item))
                 )
             return station
+    
+        # # Get an estimate of the total require memory. But only estimate it
+        # # if the file is actually larger than the memory as the test is fairly
+        # # expensive but we don't really care for small files.
+        # if (
+        #     self.__data_set().filesize
+        #     > self.__data_set().single_item_read_limit_in_mb * 1024 ** 2
+        # ):
+        #     total_size = sum(
+        #         [
+        #             self.__data_set()._get_idx_and_size_estimate(
+        #                 _i, starttime=starttime, endtime=endtime
+        #             )[3]
+        #             for _i in items
+        #         ]
+        #     )
+
+        #     # Raise an error to not read an extreme amount of data into memory.
+        #     if total_size > self.__data_set().single_item_read_limit_in_mb:
+        #         msg = (
+        #             "All waveforms for station '%s' and item '%s' would "
+        #             "require '%.2f MB of memory. The current limit is %.2f "
+        #             "MB. Adjust by setting "
+        #             "'ASDFDataSet.single_item_read_limit_in_mb' or use a "
+        #             "different method to read the waveform data."
+        #             % (
+        #                 self._station_name,
+        #                 item,
+        #                 total_size,
+        #                 self.__data_set().single_item_read_limit_in_mb,
+        #             )
+        #         )
+        #         raise ASDFValueError(msg)
+
+        traces = [self.data_set().read_trace("/Waveforms/" + self.station_name + "/" + _i) for _i in items]
+        return obspy.Stream(traces = traces)
+
+    def list(self):
+        """
+            Get a list of all data sets for this station.
+        """
+        return sorted(
+            self.waveform_dict.keys()
+        )
 
     def __dir__(self):
         """
@@ -294,12 +413,12 @@ class WaveformAccessor(object):
         if hasattr(object, "__dir__"):  # pragma: no cover
             directory = object.__dir__(self)
 
-        # directory.extend(self.get_waveform_tags())
+        directory.extend(self.get_waveform_tags())
         if "StationXML" in self.list():
             directory.append("StationXML")
-        # directory.extend(
-            # ["_station_name", "coordinates", "channel_coordinates"]
-        # )
+        directory.extend(
+            ["station_name", "coordinates", "channel_coordinates"]
+        )
         return sorted(set(directory))
 
     def __str__(self):

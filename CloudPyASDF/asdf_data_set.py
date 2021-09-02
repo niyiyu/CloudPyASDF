@@ -55,13 +55,20 @@ class CloudASDFDataSet(object):
 
         self.read_asdfdict()
         self.waveforms = StationAccessor(self)
-    
-
 
     def read_trace(self, dataset):
         '''
+            Read waveforms from h5file into ObsPy Traces.
 
+            Args:
+                dataset (str): path to waveform data
+
+            Example:
+                >>> CloudASDFDataSet.read_trace("/Waveforms/UW.OSD/UW.OSD..EHZ__2021-01-01T00:00:00__2021-01-01T00:10:00__raw_recording")
+                UW.OSD..EHZ | 2021-01-01T00:00:00.000000Z - 2021-01-01T00:10:00.000000Z | 100.0 Hz, 60001 samples
         '''
+        _j = dataset.split('/')[-1]
+        _i = _j.split('.')
         _waveform = self._file.read(dataset, 0, 0, -1)
         _tr = obspy.Trace(data = np.array(_waveform))
 
@@ -72,10 +79,12 @@ class CloudASDFDataSet(object):
 
         setattr(_tr.stats, "starttime", starttime)
         setattr(_tr.stats, "sampling_rate", sampling_rate)
+        setattr(_tr.stats, "network", _i[0])
+        setattr(_tr.stats, "station", _i[1])
+        setattr(_tr.stats, "location", _i[2])
+        setattr(_tr.stats, "channel", _i[3][:3])
 
         return _tr
-
-
 
     def read_events(self, dataset):
         '''
@@ -88,18 +97,17 @@ class CloudASDFDataSet(object):
         eventxml = eventxml[()].tobytes().strip()
         return obspy.read_events(io.BytesIO(eventxml), format="quakeml")
 
-
-
-    def read_stationxml(self, dataset):
+    def read_stationxml(self, dataset, raw = False):
         # We do a serial read to the StationXML object of UW.OSD object...
         stationxml = self._file.read(dataset, 0, 0, -1)
 
         # ... and convert them into ObsPy StationXML object.
         stationxml = np.array(stationxml, dtype = 'int8')
         stationxml = stationxml[()].tobytes().strip()
-        return obspy.read_inventory(io.BytesIO(stationxml), format="stationxml")
-
-
+        if raw:
+            return stationxml
+        else:
+            return obspy.read_inventory(io.BytesIO(stationxml), format="stationxml")
 
     def read_asdfdict(self, path = "/AuxiliaryData/ASDFDict"):
         '''
@@ -122,17 +130,12 @@ class CloudASDFDataSet(object):
                 "\n\t ... and we're searching at %s" % path
             )
             self.ASDFDict = None
-         
-
-
 
     def __dir__(self):
         '''
             Intrinsic function for accessing the attricbut/method with Tab.
         '''
         return ["abc", "acscc"]
-
-
 
     def __str__(self):
         '''
@@ -162,7 +165,6 @@ class CloudASDFDataSet(object):
             s += "\nContains TODO type(s) of auxiliary data: TODO"
 
             return s
-
 
 def traverse_dataset(cloudasdfdataset):
     asdfdict = cloudasdfdataset.read_asdfdict()
