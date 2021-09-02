@@ -8,3 +8,10 @@
 
 class CloudASDFValueError(ValueError):
     pass
+
+class WaveformNotInFileException(ValueError):
+    """
+        Raised when a non-existent waveform is accessed.
+    """
+
+    pass
