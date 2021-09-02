@@ -18,7 +18,12 @@ import datetime
 import io
 
 from .utils import (
-    read_dict
+    read_dict,
+    StationAccessor
+)
+
+from .exceptions import (
+    CloudASDFValueError
 )
 
 class CloudASDFDataSet(object):
@@ -47,6 +52,9 @@ class CloudASDFDataSet(object):
         self.endpoint = endpoint
 
         self._file = sliderule.h5coro(self.resource, self.format, self.path, self.region, self.endpoint)
+
+        self.read_asdfdict()
+        self.waveforms = StationAccessor(self)
     
 
 
@@ -82,9 +90,9 @@ class CloudASDFDataSet(object):
 
 
 
-    def read_stationxml(self, dataet):
+    def read_stationxml(self, dataset):
         # We do a serial read to the StationXML object of UW.OSD object...
-        stationxml = self._file.read("/Waveforms/UW.OSD/StationXML", 0, 0, -1)
+        stationxml = self._file.read(dataset, 0, 0, -1)
 
         # ... and convert them into ObsPy StationXML object.
         stationxml = np.array(stationxml, dtype = 'int8')
@@ -103,10 +111,20 @@ class CloudASDFDataSet(object):
             Returns:
                 dict: ASDF dictionary object that describe H5 structure.
         '''
-        self.ASDFDict = read_dict(self._file, path)
-        return self.ASDFDict
+        try:
+            asdfdict = read_dict(self._file, path)['']
+            self.ASDFDict = asdfdict
 
-    
+        except:
+            raise CloudASDFValueError(
+                "Check ASDF dictionary position."
+                "\n\t Default position is /AuxiliaryData/ASDFDict"
+                "\n\t ... and we're searching at %s" % path
+            )
+            self.ASDFDict = None
+         
+
+
 
     def __dir__(self):
         '''
@@ -123,7 +141,27 @@ class CloudASDFDataSet(object):
             Examples:
                 >>> print(cloudasdfdataset)
         '''
-        return "CloudASDFDataSet object"
+
+        s = "CloudASDFDataSet object\n============="
+        s += "\nPath: %s/%s" % (self.path, self.resource)
+        if self.format == "file":
+            s += "\nFormat: local file"
+        elif self.format == "s3": 
+            s += "\nFormat: AWS S3 file"
+            s += "\nRegion: %s" % self.region
+            s += "\nEndpoint: %s" % self.endpoint
+
+        s += "\n============="
+        if self.ASDFDict is None:
+            s += "\nASDF file structure unknown. Please get file structure first."
+            return s
+        else:
+            s += "\nASDF file structure is avaiable."
+            s += "\nContains TODO event(s)"
+            s += "\nContains waveform data from %i station(s)" % len(self.waveforms)
+            s += "\nContains TODO type(s) of auxiliary data: TODO"
+
+            return s
 
 
 def traverse_dataset(cloudasdfdataset):
