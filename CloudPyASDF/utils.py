@@ -9,6 +9,7 @@
 import h5py
 import xarray
 import numpy as np
+import weakref
 
 def gen_group_dict(group):
     '''
@@ -180,3 +181,155 @@ def _read_string_array(array):
             bytes (bytes):
     """
     return array[()].tobytes().strip()
+
+
+
+
+class StationAccessor(object):
+    """
+        Helper class to facilitate access to the waveforms and stations.
+    """
+
+    def __init__(self, cloudasdfdataset):
+        self.data_set = weakref.ref(cloudasdfdataset)
+        self.station_dict = self.data_set().ASDFDict['Waveforms']
+
+    def list(self):
+        return sorted([_i for _i in self.station_dict.keys()])
+    
+    def __dir__(self):
+        """
+            Examples:
+                >>> dir(ds.waveforms)
+        """
+        return [_i.replace(".", "_") for _i in self.list()]
+
+    def __len__(self):
+        """
+            Examples:
+                >>> len(ds.waveforms)
+        """
+        return len(self.list())
+    
+    def __iter__(self):
+        """
+            Examples:
+                >>> [i for i in ds.waveforms]
+        """
+        for _i in self.list():
+            yield self.__getattr__(_i)
+
+    def __getattr__(self, item, replace = True):
+        """
+            Examples:
+                >>> ds.waveforms.UW_SEP
+        """
+        if replace:
+            item = str(item).replace("_", ".")
+        if item not in self.list():
+            raise AttributeError("Attribute '%s' not found." % item)
+        return WaveformAccessor(item, self.data_set())
+
+    def __getitem__(self, item):
+        # Item access with replaced underscore and without. This is not
+        # strictly valid ASDF but it helps to be flexible.
+        try:
+            return self.__getattr__(item, replace=False)
+        except AttributeError:
+            try:
+                return self.__getattr__(item, replace=True)
+            except AttributeError as e:
+                raise KeyError(str(e))
+
+
+
+class WaveformAccessor(object):
+    """
+        Helper class facilitating access to the actual waveforms and stations.
+    """
+    def __init__(self, station_name, data_set):
+        # Use weak references to not have any dangling references to the HDF5
+        # file around.
+        self.station_name = station_name
+        self.data_set = weakref.ref(data_set)
+        self.waveform_dict = self.data_set().ASDFDict['Waveforms'][station_name]
+
+    def list(self):
+        """
+            Get a list of all data sets for this station.
+        """
+        return sorted(
+            self.waveform_dict.keys()
+        )
+
+    def get_waveform_tags(self):
+        """
+            Get all available waveform tags for this station.
+        """
+        return sorted(
+            set(_i.split("__")[-1] for _i in self.list() if _i != "StationXML")
+        )
+
+    def __getattr__(self, item):
+        return self.get_item(item = item)
+
+    def get_item(self, item, starttime = None, endtime = None):
+        # items = self.__filter_data(item)
+        # StationXML access.
+        if item == "StationXML":
+            station = self.data_set().read_stationxml("/Waveforms/%s/StationXML" % self.station_name)
+            if station is None:
+                raise AttributeError(
+                    "'%s' object has no attribute '%s'"
+                    % (self.__class__.__name__, str(item))
+                )
+            return station
+
+    def __dir__(self):
+        """
+            The dir method will list all this object's methods, the StationXML
+            if it has one, and all tags.
+        """
+        # Python 3.
+        if hasattr(object, "__dir__"):  # pragma: no cover
+            directory = object.__dir__(self)
+
+        # directory.extend(self.get_waveform_tags())
+        if "StationXML" in self.list():
+            directory.append("StationXML")
+        # directory.extend(
+            # ["_station_name", "coordinates", "channel_coordinates"]
+        # )
+        return sorted(set(directory))
+
+    def __str__(self):
+        contents = self.__dir__()
+        waveform_contents = sorted(self.get_waveform_tags())
+
+        ret_str = (
+            "Contents of the data set for station {station}:\n"
+            "    - {station_xml}\n"
+            "    - {count} Waveform Tag(s):\n"
+            "        {waveforms}"
+        )
+        return ret_str.format(
+            station = self.station_name,
+            station_xml = "Has a StationXML file"
+            if "StationXML" in contents
+            else "Has no StationXML file",
+            count = len(waveform_contents),
+            waveforms = "\n        ".join(waveform_contents),
+        )
+    
+    def _repr_pretty_(self, p, cycle):  # pragma: no cover
+        """
+            Show class name as waveform information rather than WaveformAccessor
+
+            Example:
+                >>> ds.waveforms.UW_OSD
+                Contents of the data set for station UW.OSD:
+                - Has a StationXML file
+                - 1 Waveform Tag(s):
+                    raw_recording
+        """
+        p.text(self.__str__())
