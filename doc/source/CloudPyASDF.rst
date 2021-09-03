@@ -12,6 +12,22 @@ CloudPyASDF.asdf\_data\_set module
    :undoc-members:
    :show-inheritance:
 
+CloudPyASDF.exceptions module
+-----------------------------
+
+.. automodule:: CloudPyASDF.exceptions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+CloudPyASDF.inventory\_utils module
+-----------------------------------
+
+.. automodule:: CloudPyASDF.inventory_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 CloudPyASDF.utils module
 ------------------------
 
