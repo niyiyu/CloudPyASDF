@@ -23,11 +23,13 @@ from .utils import (
 )
 
 from .exceptions import (
-    CloudASDFValueError
+    CloudASDFValueError,
+    ASDFDictNotInFileError
 )
 
 class CloudASDFDataSet(object):
-    def __init__(self, resource, format, path, region = "us-west-2", endpoint = "https://s3.us-west-2.amazonaws.com"):
+    def __init__(self, resource, format, path, region = "us-west-2", endpoint = "https://s3.us-west-2.amazonaws.com", 
+                asdfdict_path = "/AuxiliaryData/ASDFDict"):
         '''
             Initialization class
 
@@ -53,8 +55,13 @@ class CloudASDFDataSet(object):
 
         self._file = sliderule.h5coro(self.resource, self.format, self.path, self.region, self.endpoint)
 
-        self.read_asdfdict()
-        self.waveforms = StationAccessor(self)
+        try:
+            self.read_asdfdict(path = asdfdict_path)
+            self.waveforms = StationAccessor(self)
+        except:
+            raise ASDFDictNotInFileError(
+                "ASDF dictionary error. Please check asdf dict path.\n%s" % asdfdict_path
+            )
 
     def read_trace(self, dataset):
         '''
@@ -165,6 +172,25 @@ class CloudASDFDataSet(object):
             s += "\nContains TODO type(s) of auxiliary data: TODO"
 
             return s
+    
+    def _repr_pretty_(self, p, cycle):  # pragma: no cover
+        """
+            Show class name as ASDF data set information
+
+            Example:
+                >>> ds
+                CloudASDFDataSet object
+                =============
+                Path: ../testfile/smallasdf.h5
+                Format: local file
+                =============
+                ASDF file structure is avaiable.
+                Contains TODO event(s)
+                Contains waveform data from 2 station(s)
+                Contains TODO type(s) of auxiliary data: TODO
+
+        """
+        p.text(self.__str__())
 
 def traverse_dataset(cloudasdfdataset):
     asdfdict = cloudasdfdataset.read_asdfdict()

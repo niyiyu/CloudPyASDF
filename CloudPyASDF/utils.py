@@ -15,7 +15,7 @@ import io
 
 
 from .exceptions import (
-    WaveformNotInFileException
+    WaveformNotInFileError
 )
 from .inventory_utils import get_coordinates
 
@@ -339,7 +339,7 @@ class WaveformAccessor(object):
             keys = [_i for _i in self.list() if _i.endswith("__" + item)]
 
             if not keys:
-                raise WaveformNotInFileException(
+                raise WaveformNotInFileError(
                     "Tag '%s' not part of the data set for station '%s'."
                     % (item, self.station_name)
                 )

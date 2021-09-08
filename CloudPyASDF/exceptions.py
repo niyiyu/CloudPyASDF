@@ -9,9 +9,14 @@
 class CloudASDFValueError(ValueError):
     pass
 
-class WaveformNotInFileException(ValueError):
+class WaveformNotInFileError(ValueError):
     """
         Raised when a non-existent waveform is accessed.
     """
+    pass
 
+class ASDFDictNotInFileError(ValueError):
+    """
+        Raised when ASDF Dictionary is either not exist or parsed with error.
+    """
     pass

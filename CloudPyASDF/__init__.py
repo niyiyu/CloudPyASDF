@@ -14,3 +14,6 @@ from __future__ import (
 )
 
 from .asdf_data_set import CloudASDFDataSet
+from .exceptions import (
+    ASDFDictNotInFileError
+)
