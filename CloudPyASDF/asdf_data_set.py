@@ -63,6 +63,12 @@ class CloudASDFDataSet(object):
                 "ASDF dictionary error. Please check asdf dict path.\n%s" % asdfdict_path
             )
 
+        if "QuakeML" not in self.ASDFDict.keys():
+            self.events = obspy.core.event.Catalog()
+        else:
+            self.events = self.read_events()
+
+
     def read_trace(self, dataset):
         '''
             Read waveforms from h5file into ObsPy Traces.
@@ -93,7 +99,7 @@ class CloudASDFDataSet(object):
 
         return _tr
 
-    def read_events(self, dataset):
+    def read_events(self):
         '''
         '''
         # We do a serial read to the EventXML object ...
@@ -167,7 +173,7 @@ class CloudASDFDataSet(object):
             return s
         else:
             s += "\nASDF file structure is avaiable."
-            s += "\nContains TODO event(s)"
+            s += "\nContains %i event(s)" % len(self.events)
             s += "\nContains waveform data from %i station(s)" % len(self.waveforms)
             s += "\nContains TODO type(s) of auxiliary data: TODO"
 

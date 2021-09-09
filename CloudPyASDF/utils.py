@@ -59,6 +59,9 @@ def dump_dict(from_group, to_group, name = "dict", compress = True):
             to_group (h5py._hl.group.Group): to where the dict is stored
             name (str): dataset name taht store the dictionary
             compress (bool): decide whether to compress string
+
+        Examples:
+            >>> CloudPyASDF.utils.dump_dict(ds['/'], ds['/AuxiliaryData'], "ASDFDict")
     '''
     import gzip
 
