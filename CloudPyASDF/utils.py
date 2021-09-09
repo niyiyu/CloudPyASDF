@@ -455,3 +455,17 @@ class WaveformAccessor(object):
                     raw_recording
         """
         p.text(self.__str__())
+
+
+class AuxiliaryDataGroupAccessor(object):
+    def __init__(self, data_set):
+        # Use weak references to not have any dangling references to the HDF5
+        # file around.
+        self.data_set = weakref.ref(data_set)
+        self.auxiliarydata_dict = self.data_set().ASDFDict['AuxiliaryData']
+
+    def list(self):
+        return sorted(self.auxiliarydata_dict.keys())
+
+    def __len__(self):
+        return len(self.list())

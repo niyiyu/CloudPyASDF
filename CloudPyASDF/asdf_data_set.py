@@ -19,7 +19,8 @@ import io
 
 from .utils import (
     read_dict,
-    StationAccessor
+    StationAccessor,
+    AuxiliaryDataGroupAccessor
 )
 
 from .exceptions import (
@@ -58,6 +59,7 @@ class CloudASDFDataSet(object):
         try:
             self.read_asdfdict(path = asdfdict_path)
             self.waveforms = StationAccessor(self)
+            self.auxiliary_data = AuxiliaryDataGroupAccessor(self)
         except:
             raise ASDFDictNotInFileError(
                 "ASDF dictionary error. Please check asdf dict path.\n%s" % asdfdict_path
@@ -175,7 +177,11 @@ class CloudASDFDataSet(object):
             s += "\nASDF file structure is avaiable."
             s += "\nContains %i event(s)" % len(self.events)
             s += "\nContains waveform data from %i station(s)" % len(self.waveforms)
-            s += "\nContains TODO type(s) of auxiliary data: TODO"
+            if len(self.auxiliary_data):
+                s += "\nContains %i type(s) of auxiliary data: %s" %(
+                    len(self.auxiliary_data),
+                    ", ".join(self.auxiliary_data.list()),
+                )
 
             return s
     
