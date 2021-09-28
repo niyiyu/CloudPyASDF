@@ -15,5 +15,14 @@ from __future__ import (
 
 from .asdf_data_set import CloudASDFDataSet
 from .exceptions import (
-    ASDFDictNotInFileError
+    ASDFDictNotInFileError,
+    AWSCredentialError
 )
+
+import os
+
+cred = os.environ['HOME'] + "/.aws/credentials"
+if os.path.exists(cred):
+    print("AWS credential exists.")
+else:
+    raise AWSCredentialError("\nCheck credentials.\nSearching at %s" % cred)

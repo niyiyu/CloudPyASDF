@@ -7,7 +7,7 @@
 #    MIT License
 
 try:
-    import sliderule
+    import srpybin as sliderule
 except:
     print("Check sliderule python-binding as it is not imported.")
 

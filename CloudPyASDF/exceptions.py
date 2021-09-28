@@ -20,3 +20,6 @@ class ASDFDictNotInFileError(ValueError):
         Raised when ASDF Dictionary is either not exist or parsed with error.
     """
     pass
+
+class AWSCredentialError(ValueError):
+    pass

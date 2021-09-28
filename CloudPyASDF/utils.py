@@ -321,7 +321,7 @@ class WaveformAccessor(object):
     def __getattr__(self, item):
         return self.get_item(item = item)
 
-    def __filter_data(self, item):
+    def filter_data(self, item):
         """
             Internal filtering for item access and deletion.
         """
@@ -352,7 +352,7 @@ class WaveformAccessor(object):
 
 
     def get_item(self, item, starttime = None, endtime = None):
-        items = self.__filter_data(item)
+        items = self.filter_data(item)
         # StationXML access.
         if items == ["StationXML"]:
             station = self.data_set().read_stationxml("/Waveforms/%s/StationXML" % self.station_name)
@@ -362,7 +362,6 @@ class WaveformAccessor(object):
                     % (self.__class__.__name__, str(item))
                 )
             return station
-    
         # # Get an estimate of the total require memory. But only estimate it
         # # if the file is actually larger than the memory as the test is fairly
         # # expensive but we don't really care for small files.
