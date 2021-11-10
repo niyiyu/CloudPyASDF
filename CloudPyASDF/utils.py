@@ -39,7 +39,7 @@ def gen_group_dict(group):
     else:
         # recrusively seek into groups
         dic = {_n: {}}                              
-        for _obj in set(group.keys()):
+        for _obj in list(group.keys()):                 #set will not preserve the order, while list will!
             dic[_n].update(gen_group_dict(group[_obj]))
         return dic
 
