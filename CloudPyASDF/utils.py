@@ -10,12 +10,15 @@ import h5py
 import xarray
 import numpy as np
 import weakref
+import pandas
 import obspy
 import io
 
 
 from .exceptions import (
-    WaveformNotInFileError
+    WaveformNotInFileError,
+    NoStationXMLForStation,
+    ASDFValueError
 )
 from .inventory_utils import get_coordinates
 
@@ -35,7 +38,7 @@ def gen_group_dict(group):
     
     if isinstance(group, h5py._hl.dataset.Dataset):
         # return dataset name directly
-        return {_n: None}
+        return {_n: len(group)}
     else:
         # recrusively seek into groups
         dic = {_n: {}}                              
@@ -45,7 +48,7 @@ def gen_group_dict(group):
 
 
 
-def dump_dict(from_group, to_group, name = "dict", compress = True):
+def dump_dict(file, name = "ASDFDict", compress = True):
     '''
         Traverse a group, and store a dictionary in the group that describe 
         the group's structure.
@@ -66,21 +69,32 @@ def dump_dict(from_group, to_group, name = "dict", compress = True):
     import gzip
 
     # Check argument type...
-    for _g in [from_group, to_group]:
-        assert isinstance(_g, h5py._hl.group.Group), \
-            "Expect " + str(h5py._hl.group.Group) + "\n\t\tGet " + str(type(_g))
-    
-    s = str(gen_group_dict(from_group)).encode()
+    if isinstance(file, h5py._hl.files.File):
+        group = file
+    else:
+        group = h5py.File(file, "a")
+
+    try:
+        del group['/AuxiliaryData/ASDFDict']
+    except:
+        pass
+
+    s = str(gen_group_dict(group['/'])).encode()
 
     if compress:
         comp_s = gzip.compress(s)
-        to_group.create_dataset(name, 
+        group['/AuxiliaryData'].create_dataset(name, 
             data = np.frombuffer(comp_s, dtype = 'uint8'),
             maxshape = (None, ))
     else:    
-        to_group.create_dataset(name, 
+        group['/AuxiliaryData'].create_dataset(name, 
             data = np.frombuffer(s, dtype = 'uint8'),
             maxshape = (None, ))
+    
+    if isinstance(file, h5py._hl.files.File):
+        pass
+    else:
+        group.close()
 
 
 
@@ -263,7 +277,7 @@ class WaveformAccessor(object):
             Get all available waveform tags for this station.
         """
         return sorted(
-            set(_i.split("__")[-1] for _i in self.list() if _i != "StationXML")
+            set(_i.split("__")[-1] for _i in self.list()[0] if _i != "StationXML")
         )
 
     @property
@@ -310,7 +324,7 @@ class WaveformAccessor(object):
             )
         try:
             with io.BytesIO(self.data_set().read_stationxml(
-                "/Waveforms/" + self.station_name + "/StationXML", True
+                '/'.join(["/Waveforms", self.station_name, "StationXML"]), True
             )) as buf:
                 coordinates = get_coordinates(buf, level = level)
         finally:
@@ -329,7 +343,7 @@ class WaveformAccessor(object):
         if item == "StationXML":
             return [item]
 
-        _l = self.list()
+        _l = self.list()[0]
 
         # Single trace access
         # items would be something looks like 
@@ -339,7 +353,7 @@ class WaveformAccessor(object):
 
         # Tag access. '__' is always contained in a trace's name.
         elif "__" not in item:
-            keys = [_i for _i in self.list() if _i.endswith("__" + item)]
+            keys = [_i for _i in self.list()[0] if _i.endswith("__" + item)]
 
             if not keys:
                 raise WaveformNotInFileError(
@@ -349,19 +363,37 @@ class WaveformAccessor(object):
             return keys
 
         raise AttributeError("Item '%s' not found." % item)
+    
+    @property
+    def dataframe(self):
+        lst, npts = self.list()
+        spt = [it.split('__')[0].split('.') + it.split('__')[1:] + [npt]
+                    for it, npt in zip(lst, npts)]
+        # starttime = [it.split('__')[1] for it in lst]
+        # endtime = [it.split('__')[2] for it in lst]
+        # tag = [it.split('__')[3] for it in lst]
 
+        df = pandas.DataFrame(spt, 
+        columns = ['network', 'station', 'position', 'channel', 'starttime', 'endtime', 'tag', 'npts'])
+        
+        return df
 
     def get_item(self, item, starttime = None, endtime = None):
         items = self.filter_data(item)
         # StationXML access.
         if items == ["StationXML"]:
-            station = self.data_set().read_stationxml("/Waveforms/%s/StationXML" % self.station_name)
-            if station is None:
-                raise AttributeError(
-                    "'%s' object has no attribute '%s'"
-                    % (self.__class__.__name__, str(item))
+            if "StationXML" not in self.waveform_dict:
+                raise NoStationXMLForStation(
+                    " %s contians no StationXML" % self.station_name
                 )
-            return station
+            else:
+                station = self.data_set().read_stationxml("/Waveforms/%s/StationXML" % self.station_name)
+                if station is None:
+                    raise AttributeError(
+                        "'%s' object has no attribute '%s'"
+                        % (self.__class__.__name__, str(item))
+                    )
+                return station
         # # Get an estimate of the total require memory. But only estimate it
         # # if the file is actually larger than the memory as the test is fairly
         # # expensive but we don't really care for small files.
@@ -395,16 +427,36 @@ class WaveformAccessor(object):
         #         )
         #         raise ASDFValueError(msg)
 
-        traces = [self.data_set().read_trace("/Waveforms/" + self.station_name + "/" + _i) for _i in items]
-        return obspy.Stream(traces = traces)
+        ret_str = (
+            "{ntrace} Trace(s) in Stream:\n"
+            "{trace}"
+        )
+        waveform_content = [' | '.join(
+            it.split('__')[:3] + [" %d samples" % npt])
+            for it, npt in zip(self.list()[0], self.list()[1])
+        ]
+        print(ret_str.format(
+            ntrace = self.count_tag(item),
+            trace = 
+            '\n'.join(waveform_content)
+        ))
+        # traces = [self.data_set().read_trace('.'.join(["/Waveforms", self.station_name, _i])) for _i in items]
+        # return obspy.Stream(traces = traces)
+
+    def count_tag(self, tag):
+        n = 0
+        for it in self.list()[0]:
+            if it.split("__")[-1] == tag:
+                n += 1
+        return n
+
+
 
     def list(self):
-        """
+        """ 
             Get a list of all data sets for this station.
         """
-        return sorted(
-            self.waveform_dict.keys()
-        )
+        return [list(self.waveform_dict.keys()), list(self.waveform_dict.values())]
 
     def __dir__(self):
         """

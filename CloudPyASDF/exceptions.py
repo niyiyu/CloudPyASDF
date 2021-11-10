@@ -21,5 +21,14 @@ class ASDFDictNotInFileError(ValueError):
     """
     pass
 
+class NoStationXMLForStation(ValueError):
+    """
+        Raised when station continas no XML information.
+    """
+    pass
+
+class ASDFValueError(ValueError):
+    pass
+
 class AWSCredentialError(ValueError):
     pass
