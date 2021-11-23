@@ -11,9 +11,11 @@ import xarray
 import numpy as np
 import weakref
 import pandas
+# import sqlite3
 import obspy
 import io
 
+from obspy.core.utcdatetime import UTCDateTime
 
 from .exceptions import (
     WaveformNotInFileError,
@@ -335,6 +337,26 @@ class WaveformAccessor(object):
     def __getattr__(self, item):
         return self.get_item(item = item)
 
+    
+    def __iter__(self):
+        content = self._waveform_content()
+        for c in content:
+            t = self.data_set().read_trace('/'.join(["/Waveforms", self.station_name, c[8]]))
+            t.stats.network = c[0]
+            t.stats.station = c[1]
+            t.stats.location = c[2]
+            t.stats.channel = c[3]
+            t.stats.starttime = UTCDateTime(c[4])
+            # t.stats.endtime = UTCDateTime(c[5])
+            t.stats.delta = (UTCDateTime(c[5]) - UTCDateTime(c[4]))/c[7]
+            setattr(t.stats, "tag", c[6])
+            t.stats.npts = c[7]
+            yield t
+
+    def dataless(self):
+        return DatalessWaveformAccessor(self.station_name, self.data_set)
+
+
     def filter_data(self, item):
         """
             Internal filtering for item access and deletion.
@@ -431,17 +453,25 @@ class WaveformAccessor(object):
             "{ntrace} Trace(s) in Stream:\n"
             "{trace}"
         )
-        waveform_content = [' | '.join(
-            it.split('__')[:3] + [" %d samples" % npt])
-            for it, npt in zip(self.list()[0], self.list()[1])
-        ]
-        print(ret_str.format(
-            ntrace = self.count_tag(item),
-            trace = 
-            '\n'.join(waveform_content)
-        ))
+        waveform_content = self._waveform_content()
+        # print(ret_str.format(
+        #     ntrace = self.count_tag(item),
+        #     trace = 
+        #     '\n'.join(
+        #         waveform_content
+        #         )
+        # ))
         # traces = [self.data_set().read_trace('.'.join(["/Waveforms", self.station_name, _i])) for _i in items]
         # return obspy.Stream(traces = traces)
+
+    def _waveform_content(self):
+        content = []
+        for i, npt  in zip(self.list()[0], self.list()[1]):
+            if i != "StationXML":
+                code, starttime, endtime, tag = i.split('__')
+                net, sta, loc, cha = code.split('.')
+                content.append([net, sta, loc, cha, starttime, endtime, tag, npt, i])
+        return content
 
     def count_tag(self, tag):
         n = 0
@@ -449,8 +479,6 @@ class WaveformAccessor(object):
             if it.split("__")[-1] == tag:
                 n += 1
         return n
-
-
 
     def list(self):
         """ 
@@ -507,6 +535,26 @@ class WaveformAccessor(object):
         """
         p.text(self.__str__())
 
+class DatalessWaveformAccessor(WaveformAccessor):
+    def __init__(self, station_name, data_set):
+        self.station_name = station_name
+        self.data_set = data_set
+        self.waveform_dict = self.data_set().ASDFDict['Waveforms'][station_name]
+
+    def __iter__(self):
+        content = super()._waveform_content()
+        for c in content:
+            t = obspy.Trace()
+            t.stats.network = c[0]
+            t.stats.station = c[1]
+            t.stats.location = c[2]
+            t.stats.channel = c[3]
+            t.stats.starttime = UTCDateTime(c[4])
+            # t.stats.endtime = UTCDateTime(c[5])
+            t.stats.delta = (UTCDateTime(c[5]) - UTCDateTime(c[4]))/c[7]
+            setattr(t.stats, "tag", c[6])
+            t.stats.npts = c[7]
+            yield t
 
 class AuxiliaryDataGroupAccessor(object):
     def __init__(self, data_set):
