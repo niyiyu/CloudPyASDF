@@ -59,7 +59,7 @@ class CloudASDFDataSet(object):
         if ASDFDict is not None:
             self.ASDFDict = ASDFDict
             Warning("User-defined ASDF structure.")
-
+        else:
             try:
                 self.read_asdfdict(path = asdfdict_path)
             except:
