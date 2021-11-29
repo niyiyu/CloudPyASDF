@@ -342,15 +342,15 @@ class WaveformAccessor(object):
         content = self._waveform_content()
         for c in content:
             t = self.data_set().read_trace('/'.join(["/Waveforms", self.station_name, c[8]]))
-            t.stats.network = c[0]
-            t.stats.station = c[1]
-            t.stats.location = c[2]
-            t.stats.channel = c[3]
-            t.stats.starttime = UTCDateTime(c[4])
+            # t.stats.network = c[0]
+            # t.stats.station = c[1]
+            # t.stats.location = c[2]
+            # t.stats.channel = c[3]
+            # t.stats.starttime = UTCDateTime(c[4])
             # t.stats.endtime = UTCDateTime(c[5])
-            t.stats.delta = (UTCDateTime(c[5]) - UTCDateTime(c[4]))/c[7]
+            # t.stats.delta = (UTCDateTime(c[5]) - UTCDateTime(c[4]))/c[7]
             setattr(t.stats, "tag", c[6])
-            t.stats.npts = c[7]
+            # t.stats.npts = c[7]
             yield t
 
     def dataless(self):
@@ -545,15 +545,34 @@ class DatalessWaveformAccessor(WaveformAccessor):
         content = super()._waveform_content()
         for c in content:
             t = obspy.Trace()
-            t.stats.network = c[0]
-            t.stats.station = c[1]
-            t.stats.location = c[2]
-            t.stats.channel = c[3]
-            t.stats.starttime = UTCDateTime(c[4])
+            # t.stats.network = c[0]
+            # t.stats.station = c[1]
+            # t.stats.location = c[2]
+            # t.stats.channel = c[3]
+            # t.stats.starttime = UTCDateTime(c[4])
             # t.stats.endtime = UTCDateTime(c[5])
-            t.stats.delta = (UTCDateTime(c[5]) - UTCDateTime(c[4]))/c[7]
-            setattr(t.stats, "tag", c[6])
+            # t.stats.delta = (UTCDateTime(c[5]) - UTCDateTime(c[4]))/c[7]
+
             t.stats.npts = c[7]
+
+            try:
+                starttime = datetime.datetime.strptime(c[4][:26], "%Y-%m-%dT%H:%M:%S.%f")
+                endtime = datetime.datetime.strptime(c[5][:26], "%Y-%m-%dT%H:%M:%S.%f")
+            except:
+                starttime = datetime.datetime.strptime(c[4], "%Y-%m-%dT%H:%M:%S")
+                endtime = datetime.datetime.strptime(c[5], "%Y-%m-%dT%H:%M:%S")
+            delta = (endtime - starttime).total_seconds()
+            sampling_rate = (c[7]-1)/delta
+
+            setattr(t.stats, "tag", c[6])
+            #setattr(t.stats, "delta", delta.total_seconds())
+            setattr(t.stats, "starttime", starttime)
+            setattr(t.stats, "sampling_rate", sampling_rate)
+            setattr(t.stats, "network", c[0])
+            setattr(t.stats, "station", c[1])
+            setattr(t.stats, "location", c[2])
+            setattr(t.stats, "channel", c[3])
+
             yield t
 
 class AuxiliaryDataGroupAccessor(object):

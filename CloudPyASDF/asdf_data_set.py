@@ -91,8 +91,12 @@ class CloudASDFDataSet(object):
         _waveform = self._file.read(dataset, 0, 0, -1)
         _tr = obspy.Trace(data = np.array(_waveform))
 
-        starttime = datetime.datetime.strptime(dataset.split("__")[1], "%Y-%m-%dT%H:%M:%S")
-        endtime = datetime.datetime.strptime(dataset.split("__")[2], "%Y-%m-%dT%H:%M:%S")
+        try:
+            starttime = datetime.datetime.strptime(dataset.split("__")[1][:26], "%Y-%m-%dT%H:%M:%S.%f")
+            endtime = datetime.datetime.strptime(dataset.split("__")[2][:26], "%Y-%m-%dT%H:%M:%S.%f")
+        except:
+            starttime = datetime.datetime.strptime(dataset.split("__")[1], "%Y-%m-%dT%H:%M:%S")
+            endtime = datetime.datetime.strptime(dataset.split("__")[2], "%Y-%m-%dT%H:%M:%S")
         delta = (endtime - starttime).total_seconds()
         sampling_rate = (len(_tr.data)-1)/delta
 
