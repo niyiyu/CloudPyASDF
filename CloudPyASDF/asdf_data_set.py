@@ -66,8 +66,8 @@ class CloudASDFDataSet(object):
                 raise ASDFDictNotInFileError(
                     "ASDF dictionary error. Please check asdf dict path.\n%s" % asdfdict_path
                 )
-            self.waveforms = StationAccessor(self)
-            self.auxiliary_data = AuxiliaryDataGroupAccessor(self)
+        self.waveforms = StationAccessor(self)
+        self.auxiliary_data = AuxiliaryDataGroupAccessor(self)
 
         if "QuakeML" not in self.ASDFDict.keys():
             self.events = obspy.core.event.Catalog()
