@@ -30,7 +30,7 @@ from .exceptions import (
 
 class CloudASDFDataSet(object):
     def __init__(self, resource, format, path, region = "us-west-2", endpoint = "https://s3.us-west-2.amazonaws.com", 
-                asdfdict_path = "/AuxiliaryData/ASDFDict"):
+                asdfdict_path = "/AuxiliaryData/ASDFDict", ASDFDict = None):
         '''
             Initialization class
 
@@ -56,14 +56,18 @@ class CloudASDFDataSet(object):
 
         self._file = sliderule.h5coro(self.resource, self.format, self.path, self.region, self.endpoint)
 
-        try:
-            self.read_asdfdict(path = asdfdict_path)
+        if ASDFDict is not None:
+            self.ASDFDict = ASDFDict
+            Warning("User-defined ASDF structure.")
+
+            try:
+                self.read_asdfdict(path = asdfdict_path)
+            except:
+                raise ASDFDictNotInFileError(
+                    "ASDF dictionary error. Please check asdf dict path.\n%s" % asdfdict_path
+                )
             self.waveforms = StationAccessor(self)
             self.auxiliary_data = AuxiliaryDataGroupAccessor(self)
-        except:
-            raise ASDFDictNotInFileError(
-                "ASDF dictionary error. Please check asdf dict path.\n%s" % asdfdict_path
-            )
 
         if "QuakeML" not in self.ASDFDict.keys():
             self.events = obspy.core.event.Catalog()
