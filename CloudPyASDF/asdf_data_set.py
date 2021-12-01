@@ -18,6 +18,8 @@ import datetime
 import io
 
 from .utils import (
+    readp_array,
+    parse_trace,
     read_dict,
     StationAccessor,
     AuxiliaryDataGroupAccessor
@@ -108,6 +110,16 @@ class CloudASDFDataSet(object):
         setattr(_tr.stats, "channel", _i[3][:3])
 
         return _tr
+    
+    def readp_trace(self, datasets):
+        readlist = []
+        S = obspy.Stream()
+        for _d in datasets:
+            readlist.append([_d, 0, 0, -1])
+        stream_data = readp_array(self._file, readlist)
+        for k, d in stream_data.items():
+            S.append(parse_trace(k.split('/')[3], d))
+        return S
 
     def read_events(self):
         '''

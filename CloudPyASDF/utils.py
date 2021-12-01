@@ -15,7 +15,8 @@ import pandas
 import obspy
 import io
 
-from obspy.core.utcdatetime import UTCDateTime
+# from obspy.core.utcdatetime import UTCDateTime
+import datetime
 
 from .exceptions import (
     WaveformNotInFileError,
@@ -203,6 +204,31 @@ def _read_string_array(array):
     """
     return array[()].tobytes().strip()
 
+def parse_trace(dname, data):
+    _code, _starttime, _endtime, tag = dname.split('__')
+    net, sta, loc, cha = _code.split('.')
+    t = obspy.Trace()
+    t.data = np.array(data)
+
+    try:
+        starttime = datetime.datetime.strptime(_starttime, "%Y-%m-%dT%H:%M:%S.%f")
+        endtime = datetime.datetime.strptime(_endtime, "%Y-%m-%dT%H:%M:%S.%f")
+    except:
+        starttime = datetime.datetime.strptime(_starttime, "%Y-%m-%dT%H:%M:%S")
+        endtime = datetime.datetime.strptime(_endtime, "%Y-%m-%dT%H:%M:%S")
+    delta = (endtime - starttime).total_seconds()
+    sampling_rate = (len(data)-1)/delta
+
+    setattr(t.stats, "tag", tag)
+    #setattr(t.stats, "delta", delta.total_seconds())
+    setattr(t.stats, "starttime", starttime)
+    setattr(t.stats, "sampling_rate", sampling_rate)
+    setattr(t.stats, "network", net)
+    setattr(t.stats, "station", sta)
+    setattr(t.stats, "location", loc)
+    setattr(t.stats, "channel", cha)
+
+    return t
 
 
 class StationAccessor(object):
@@ -461,8 +487,7 @@ class WaveformAccessor(object):
         #         waveform_content
         #         )
         # ))
-        # traces = [self.data_set().read_trace('.'.join(["/Waveforms", self.station_name, _i])) for _i in items]
-        # return obspy.Stream(traces = traces)
+        return self.data_set().readp_trace(['/'.join(["/Waveforms", self.station_name, _i]) for _i in items])
 
     def _waveform_content(self):
         content = []
