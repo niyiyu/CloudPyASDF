@@ -211,8 +211,8 @@ def parse_trace(dname, data):
     t.data = np.array(data)
 
     try:
-        starttime = datetime.datetime.strptime(_starttime, "%Y-%m-%dT%H:%M:%S.%f")
-        endtime = datetime.datetime.strptime(_endtime, "%Y-%m-%dT%H:%M:%S.%f")
+        starttime = datetime.datetime.strptime(_starttime[:26], "%Y-%m-%dT%H:%M:%S.%f")
+        endtime = datetime.datetime.strptime(_endtime[:26], "%Y-%m-%dT%H:%M:%S.%f")
     except:
         starttime = datetime.datetime.strptime(_starttime, "%Y-%m-%dT%H:%M:%S")
         endtime = datetime.datetime.strptime(_endtime, "%Y-%m-%dT%H:%M:%S")
