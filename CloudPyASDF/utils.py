@@ -426,7 +426,7 @@ class WaveformAccessor(object):
         
         return df
 
-    def get_item(self, item, starttime = None, endtime = None):
+    def get_item(self, item, starttime = None, endtime = None, parse = False):
         items = self.filter_data(item)
         # StationXML access.
         if items == ["StationXML"]:
@@ -487,7 +487,14 @@ class WaveformAccessor(object):
         #         waveform_content
         #         )
         # ))
-        return self.data_set().readp_trace(['/'.join(["/Waveforms", self.station_name, _i]) for _i in items])
+        if parse:
+            return self.data_set().readp_trace(['/'.join(["/Waveforms", self.station_name, _i]) for _i in items])
+        else:
+            datasets = ['/'.join(["/Waveforms", self.station_name, _i]) for _i in items]
+            readlist = []
+            for _d in datasets:
+                readlist.append([_d, 0, 0, -1])
+            return readp_array(self.data_set()._file, readlist)
 
     def _waveform_content(self):
         content = []
