@@ -11,6 +11,7 @@ import xarray
 import numpy as np
 import weakref
 import pandas
+
 # import sqlite3
 import obspy
 import io
@@ -18,57 +19,55 @@ import io
 # from obspy.core.utcdatetime import UTCDateTime
 import datetime
 
-from .exceptions import (
-    WaveformNotInFileError,
-    NoStationXMLForStation,
-    ASDFValueError
-)
+from .exceptions import WaveformNotInFileError, NoStationXMLForStation, ASDFValueError
 from .inventory_utils import get_coordinates
 
+
 def gen_group_dict(group):
-    '''
-        Recursively traverse a group, generate and return the structure as a dictionary.
+    """
+    Recursively traverse a group, generate and return the structure as a dictionary.
 
-        Args:
-            group (h5py._hl.group.Group): hdf5 group to store xarray dataset.
+    Args:
+        group (h5py._hl.group.Group): hdf5 group to store xarray dataset.
 
-        Returns:
-            dic (dict): the dictionary tht describe the group's strcuture.
-    '''
+    Returns:
+        dic (dict): the dictionary tht describe the group's strcuture.
+    """
 
     # get the group name and avoid full path
-    _n = group.name.split('/')[-1]                   
-    
+    _n = group.name.split("/")[-1]
+
     if isinstance(group, h5py._hl.dataset.Dataset):
         # return dataset name directly
         return {_n: len(group)}
     else:
         # recrusively seek into groups
-        dic = {_n: {}}                              
-        for _obj in list(group.keys()):                 #set will not preserve the order, while list will!
+        dic = {_n: {}}
+        for _obj in list(
+            group.keys()
+        ):  # set will not preserve the order, while list will!
             dic[_n].update(gen_group_dict(group[_obj]))
         return dic
 
 
+def dump_dict(file, name="ASDFDict", compress=True):
+    """
+    Traverse a group, and store a dictionary in the group that describe
+    the group's structure.
 
-def dump_dict(file, name = "ASDFDict", compress = True):
-    '''
-        Traverse a group, and store a dictionary in the group that describe 
-        the group's structure.
+    Compression is done by default as when gzip is used (LZW algorithm),
+    the string could be dramatically shortened. This is especially useful
+    for file with small trace/network/station name heterogenity.
 
-        Compression is done by default as when gzip is used (LZW algorithm), 
-        the string could be dramatically shortened. This is especially useful
-        for file with small trace/network/station name heterogenity.
-        
-        Args:
-            from_group (h5py._hl.group.Group): from which group the dict is dumped
-            to_group (h5py._hl.group.Group): to where the dict is stored
-            name (str): dataset name taht store the dictionary
-            compress (bool): decide whether to compress string
+    Args:
+        from_group (h5py._hl.group.Group): from which group the dict is dumped
+        to_group (h5py._hl.group.Group): to where the dict is stored
+        name (str): dataset name taht store the dictionary
+        compress (bool): decide whether to compress string
 
-        Examples:
-            >>> CloudPyASDF.utils.dump_dict(ds['/'], ds['/AuxiliaryData'], "ASDFDict")
-    '''
+    Examples:
+        >>> CloudPyASDF.utils.dump_dict(ds['/'], ds['/AuxiliaryData'], "ASDFDict")
+    """
     import gzip
 
     # Check argument type...
@@ -78,46 +77,45 @@ def dump_dict(file, name = "ASDFDict", compress = True):
         group = h5py.File(file, "a")
 
     try:
-        del group['/AuxiliaryData/ASDFDict']
+        del group["/AuxiliaryData/ASDFDict"]
     except:
         pass
 
-    s = str(gen_group_dict(group['/'])).encode()
+    s = str(gen_group_dict(group["/"])).encode()
 
     if compress:
         comp_s = gzip.compress(s)
-        group['/AuxiliaryData'].create_dataset(name, 
-            data = np.frombuffer(comp_s, dtype = 'uint8'),
-            maxshape = (None, ))
-    else:    
-        group['/AuxiliaryData'].create_dataset(name, 
-            data = np.frombuffer(s, dtype = 'uint8'),
-            maxshape = (None, ))
-    
+        group["/AuxiliaryData"].create_dataset(
+            name, data=np.frombuffer(comp_s, dtype="uint8"), maxshape=(None,)
+        )
+    else:
+        group["/AuxiliaryData"].create_dataset(
+            name, data=np.frombuffer(s, dtype="uint8"), maxshape=(None,)
+        )
+
     if isinstance(file, h5py._hl.files.File):
         pass
     else:
         group.close()
 
 
-
 def read_dict(h5file, path):
     """
-        Read and decode into dictionary from HDF5 file with h5coro.
+    Read and decode into dictionary from HDF5 file with h5coro.
 
-        Args:
-            h5file (sliderule.h5coro): h5coro file object
-            path (str): a hdf5 dataset path, looks like "/group/subgroup/dataset"
+    Args:
+        h5file (sliderule.h5coro): h5coro file object
+        path (str): a hdf5 dataset path, looks like "/group/subgroup/dataset"
 
-        Return:
-            dic (dict): the dictionary tht describe the group's strcuture.
+    Return:
+        dic (dict): the dictionary tht describe the group's strcuture.
     """
     import gzip
     from numpy import array as array
     from numpy import float32 as float32
 
     _str = h5file.read(path)
-    _str = np.array(_str, dtype = 'uint8')
+    _str = np.array(_str, dtype="uint8")
     _str_byte = _read_string_array(_str)
 
     try:
@@ -128,18 +126,19 @@ def read_dict(h5file, path):
         pass
 
     dic = eval(_str_byte)
-    
+
     return dic
 
-def readp_dict(h5file, readp_list, prefix = '', suffix = ''):
-    """
-        Read and decode into dictionary from HDF5 file with h5coro in multi-thread.
 
-        Args:
-            h5file (sliderule.h5coro): h5coro file object
-            readp_list (list): see h5coro.readp()
-            prefix (str): global prefix for readp_list's path
-            suffix (str): global suffix for readp_list's path
+def readp_dict(h5file, readp_list, prefix="", suffix=""):
+    """
+    Read and decode into dictionary from HDF5 file with h5coro in multi-thread.
+
+    Args:
+        h5file (sliderule.h5coro): h5coro file object
+        readp_list (list): see h5coro.readp()
+        prefix (str): global prefix for readp_list's path
+        suffix (str): global suffix for readp_list's path
 
     """
     # For some modules like xarray, it just don't show full name of arrays and data type.
@@ -151,10 +150,10 @@ def readp_dict(h5file, readp_list, prefix = '', suffix = ''):
     _readp_list = [[prefix + i[0], i[1], i[2], i[3]] for i in readp_list]
     _readp_list = [[i[0] + suffix, i[1], i[2], i[3]] for i in _readp_list]
     _dict = h5file.readp(_readp_list)
-    
+
     new_dict = {}
     for item in readp_list:
-        _str = np.array(_dict[prefix + item[0] + suffix], dtype = 'uint8')
+        _str = np.array(_dict[prefix + item[0] + suffix], dtype="uint8")
         _str_byte = _read_string_array(_str)
 
         try:
@@ -167,46 +166,49 @@ def readp_dict(h5file, readp_list, prefix = '', suffix = ''):
         new_dict[item[0]] = eval(_str_byte)
     return new_dict
 
-def readp_array(h5file, readp_list, prefix = '', suffix = ''):
-    """
-        Read and decode into array from HDF5 file with h5coro in multi-thread.
-        Only different from readp_dict is skipping string parsing.
 
-        Args:
-            h5file (sliderule.h5coro): h5coro file object
-            readp_list (list): see h5coro.readp()
-            prefix (str): global prefix for readp_list's path
-            suffix (str): global suffix for readp_list's path
+def readp_array(h5file, readp_list, prefix="", suffix=""):
+    """
+    Read and decode into array from HDF5 file with h5coro in multi-thread.
+    Only different from readp_dict is skipping string parsing.
+
+    Args:
+        h5file (sliderule.h5coro): h5coro file object
+        readp_list (list): see h5coro.readp()
+        prefix (str): global prefix for readp_list's path
+        suffix (str): global suffix for readp_list's path
     """
     _readp_list = [[prefix + i[0] + suffix, i[1], i[2], i[3]] for i in readp_list]
     _dict = h5file.readp(_readp_list)
-    
+
     _new_dict = {}
     for item in readp_list:
         _new_dict[item[0]] = _dict[prefix + item[0] + suffix]
 
     return _new_dict
 
+
 def _read_string_array(array):
     """
-        Helper function taking a string data and preparing it so it can be
-        read to other object.
+    Helper function taking a string data and preparing it so it can be
+    read to other object.
 
-        As string array are stored as ASCII-int in HDF5, decode is required.
+    As string array are stored as ASCII-int in HDF5, decode is required.
 
-        data (numpy.array): data array that encodes a string
+    data (numpy.array): data array that encodes a string
 
-        Args:
-            array (numpy.array):
-        
-        Returns:
-            bytes (bytes):
+    Args:
+        array (numpy.array):
+
+    Returns:
+        bytes (bytes):
     """
     return array[()].tobytes().strip()
 
+
 def parse_trace(dname, data):
-    _code, _starttime, _endtime, tag = dname.split('__')
-    net, sta, loc, cha = _code.split('.')
+    _code, _starttime, _endtime, tag = dname.split("__")
+    net, sta, loc, cha = _code.split(".")
     t = obspy.Trace()
     t.data = np.array(data)
 
@@ -217,10 +219,10 @@ def parse_trace(dname, data):
         starttime = datetime.datetime.strptime(_starttime, "%Y-%m-%dT%H:%M:%S")
         endtime = datetime.datetime.strptime(_endtime, "%Y-%m-%dT%H:%M:%S")
     delta = (endtime - starttime).total_seconds()
-    sampling_rate = (len(data)-1)/delta
+    sampling_rate = (len(data) - 1) / delta
 
     setattr(t.stats, "tag", tag)
-    #setattr(t.stats, "delta", delta.total_seconds())
+    # setattr(t.stats, "delta", delta.total_seconds())
     setattr(t.stats, "starttime", starttime)
     setattr(t.stats, "sampling_rate", sampling_rate)
     setattr(t.stats, "network", net)
@@ -233,42 +235,42 @@ def parse_trace(dname, data):
 
 class StationAccessor(object):
     """
-        Helper class to facilitate access to the waveforms and stations.
+    Helper class to facilitate access to the waveforms and stations.
     """
 
     def __init__(self, cloudasdfdataset):
         self.data_set = weakref.ref(cloudasdfdataset)
-        self.station_dict = self.data_set().ASDFDict['Waveforms']
+        self.station_dict = self.data_set().ASDFDict["Waveforms"]
 
     def list(self):
         return sorted([_i for _i in self.station_dict.keys()])
-    
+
     def __dir__(self):
         """
-            Examples:
-                >>> dir(ds.waveforms)
+        Examples:
+            >>> dir(ds.waveforms)
         """
         return [_i.replace(".", "_") for _i in self.list()]
 
     def __len__(self):
         """
-            Examples:
-                >>> len(ds.waveforms)
+        Examples:
+            >>> len(ds.waveforms)
         """
         return len(self.list())
-    
+
     def __iter__(self):
         """
-            Examples:
-                >>> [i for i in ds.waveforms]
+        Examples:
+            >>> [i for i in ds.waveforms]
         """
         for _i in self.list():
             yield self.__getattr__(_i)
 
-    def __getattr__(self, item, replace = True):
+    def __getattr__(self, item, replace=True):
         """
-            Examples:
-                >>> ds.waveforms.UW_SEP
+        Examples:
+            >>> ds.waveforms.UW_SEP
         """
         if replace:
             item = str(item).replace("_", ".")
@@ -288,21 +290,21 @@ class StationAccessor(object):
                 raise KeyError(str(e))
 
 
-
 class WaveformAccessor(object):
     """
-        Helper class facilitating access to the actual waveforms and stations.
+    Helper class facilitating access to the actual waveforms and stations.
     """
+
     def __init__(self, station_name, data_set):
         # Use weak references to not have any dangling references to the HDF5
         # file around.
         self.station_name = station_name
         self.data_set = weakref.ref(data_set)
-        self.waveform_dict = self.data_set().ASDFDict['Waveforms'][station_name]
+        self.waveform_dict = self.data_set().ASDFDict["Waveforms"][station_name]
 
     def get_waveform_tags(self):
         """
-            Get all available waveform tags for this station.
+        Get all available waveform tags for this station.
         """
         return sorted(
             set(_i.split("__")[-1] for _i in self.list()[0] if _i != "StationXML")
@@ -311,9 +313,9 @@ class WaveformAccessor(object):
     @property
     def coordinates(self):
         """
-            Get coordinates of the station if any.
+        Get coordinates of the station if any.
         """
-        coords = self.__get_coordinates(level = "station")
+        coords = self.__get_coordinates(level="station")
         # Such a file actually cannot be created with pyasdf but maybe with
         # other codes. Thus we skip the coverage here.
         if self.station_name not in coords:  # pragma: no cover
@@ -326,9 +328,9 @@ class WaveformAccessor(object):
     @property
     def channel_coordinates(self):
         """
-            Get coordinates of the station at the channel level if any.
+        Get coordinates of the station at the channel level if any.
         """
-        coords = self.__get_coordinates(level = "channel")
+        coords = self.__get_coordinates(level="channel")
         # Filter to only keep channels with the current station name.
         coords = {
             key: value
@@ -341,33 +343,36 @@ class WaveformAccessor(object):
                 "the channel level for station '%s'." % self.station_name
             )
         return coords
-    
+
     def __get_coordinates(self, level):
         """
-            Helper function.
+        Helper function.
         """
         if "StationXML" not in self.waveform_dict:
             raise NoStationXMLForStation(
                 "Station '%s' has no StationXML " "file." % self.station_name
             )
         try:
-            with io.BytesIO(self.data_set().read_stationxml(
-                '/'.join(["/Waveforms", self.station_name, "StationXML"]), True
-            )) as buf:
-                coordinates = get_coordinates(buf, level = level)
+            with io.BytesIO(
+                self.data_set().read_stationxml(
+                    "/".join(["/Waveforms", self.station_name, "StationXML"]), True
+                )
+            ) as buf:
+                coordinates = get_coordinates(buf, level=level)
         finally:
             pass
 
         return coordinates
 
     def __getattr__(self, item):
-        return self.get_item(item = item)
+        return self.get_item(item=item)
 
-    
     def __iter__(self):
         content = self._waveform_content()
         for c in content:
-            t = self.data_set().read_trace('/'.join(["/Waveforms", self.station_name, c[8]]))
+            t = self.data_set().read_trace(
+                "/".join(["/Waveforms", self.station_name, c[8]])
+            )
             # t.stats.network = c[0]
             # t.stats.station = c[1]
             # t.stats.location = c[2]
@@ -382,10 +387,9 @@ class WaveformAccessor(object):
     def dataless(self):
         return DatalessWaveformAccessor(self.station_name, self.data_set)
 
-
     def filter_data(self, item):
         """
-            Internal filtering for item access and deletion.
+        Internal filtering for item access and deletion.
         """
         # StationXML access.
         if item == "StationXML":
@@ -394,7 +398,7 @@ class WaveformAccessor(object):
         _l = self.list()[0]
 
         # Single trace access
-        # items would be something looks like 
+        # items would be something looks like
         # 'UW.OSD..EHZ__2021-01-01T00:00:00__2021-01-01T01:00:00__raw_recording'
         if item in _l:
             return [item]
@@ -411,22 +415,35 @@ class WaveformAccessor(object):
             return keys
 
         raise AttributeError("Item '%s' not found." % item)
-    
+
     @property
     def dataframe(self):
         lst, npts = self.list()
-        spt = [it.split('__')[0].split('.') + it.split('__')[1:] + [npt]
-                    for it, npt in zip(lst, npts)]
+        spt = [
+            it.split("__")[0].split(".") + it.split("__")[1:] + [npt]
+            for it, npt in zip(lst, npts)
+        ]
         # starttime = [it.split('__')[1] for it in lst]
         # endtime = [it.split('__')[2] for it in lst]
         # tag = [it.split('__')[3] for it in lst]
 
-        df = pandas.DataFrame(spt, 
-        columns = ['network', 'station', 'position', 'channel', 'starttime', 'endtime', 'tag', 'npts'])
-        
+        df = pandas.DataFrame(
+            spt,
+            columns=[
+                "network",
+                "station",
+                "position",
+                "channel",
+                "starttime",
+                "endtime",
+                "tag",
+                "npts",
+            ],
+        )
+
         return df
 
-    def get_item(self, item, starttime = None, endtime = None, parse = False):
+    def get_item(self, item, starttime=None, endtime=None, parse=False):
         items = self.filter_data(item)
         # StationXML access.
         if items == ["StationXML"]:
@@ -435,7 +452,9 @@ class WaveformAccessor(object):
                     " %s contians no StationXML" % self.station_name
                 )
             else:
-                station = self.data_set().read_stationxml("/Waveforms/%s/StationXML" % self.station_name)
+                station = self.data_set().read_stationxml(
+                    "/Waveforms/%s/StationXML" % self.station_name
+                )
                 if station is None:
                     raise AttributeError(
                         "'%s' object has no attribute '%s'"
@@ -475,22 +494,21 @@ class WaveformAccessor(object):
         #         )
         #         raise ASDFValueError(msg)
 
-        ret_str = (
-            "{ntrace} Trace(s) in Stream:\n"
-            "{trace}"
-        )
+        ret_str = "{ntrace} Trace(s) in Stream:\n" "{trace}"
         waveform_content = self._waveform_content()
         # print(ret_str.format(
         #     ntrace = self.count_tag(item),
-        #     trace = 
+        #     trace =
         #     '\n'.join(
         #         waveform_content
         #         )
         # ))
         if parse:
-            return self.data_set().readp_trace(['/'.join(["/Waveforms", self.station_name, _i]) for _i in items])
+            return self.data_set().readp_trace(
+                ["/".join(["/Waveforms", self.station_name, _i]) for _i in items]
+            )
         else:
-            datasets = ['/'.join(["/Waveforms", self.station_name, _i]) for _i in items]
+            datasets = ["/".join(["/Waveforms", self.station_name, _i]) for _i in items]
             readlist = []
             for _d in datasets:
                 readlist.append([_d, 0, 0, -1])
@@ -498,10 +516,10 @@ class WaveformAccessor(object):
 
     def _waveform_content(self):
         content = []
-        for i, npt  in zip(self.list()[0], self.list()[1]):
+        for i, npt in zip(self.list()[0], self.list()[1]):
             if i != "StationXML":
-                code, starttime, endtime, tag = i.split('__')
-                net, sta, loc, cha = code.split('.')
+                code, starttime, endtime, tag = i.split("__")
+                net, sta, loc, cha = code.split(".")
                 content.append([net, sta, loc, cha, starttime, endtime, tag, npt, i])
         return content
 
@@ -513,15 +531,15 @@ class WaveformAccessor(object):
         return n
 
     def list(self):
-        """ 
-            Get a list of all data sets for this station.
+        """
+        Get a list of all data sets for this station.
         """
         return [list(self.waveform_dict.keys()), list(self.waveform_dict.values())]
 
     def __dir__(self):
         """
-            The dir method will list all this object's methods, the StationXML
-            if it has one, and all tags.
+        The dir method will list all this object's methods, the StationXML
+        if it has one, and all tags.
         """
         # Python 3.
         if hasattr(object, "__dir__"):  # pragma: no cover
@@ -530,9 +548,7 @@ class WaveformAccessor(object):
         directory.extend(self.get_waveform_tags())
         if "StationXML" in self.list():
             directory.append("StationXML")
-        directory.extend(
-            ["station_name", "coordinates", "channel_coordinates"]
-        )
+        directory.extend(["station_name", "coordinates", "channel_coordinates"])
         return sorted(set(directory))
 
     def __str__(self):
@@ -546,32 +562,33 @@ class WaveformAccessor(object):
             "        {waveforms}"
         )
         return ret_str.format(
-            station = self.station_name,
-            station_xml = "Has a StationXML file"
+            station=self.station_name,
+            station_xml="Has a StationXML file"
             if "StationXML" in contents
             else "Has no StationXML file",
-            count = len(waveform_contents),
-            waveforms = "\n        ".join(waveform_contents),
+            count=len(waveform_contents),
+            waveforms="\n        ".join(waveform_contents),
         )
-    
+
     def _repr_pretty_(self, p, cycle):  # pragma: no cover
         """
-            Show class name as waveform information rather than WaveformAccessor
+        Show class name as waveform information rather than WaveformAccessor
 
-            Example:
-                >>> ds.waveforms.UW_OSD
-                Contents of the data set for station UW.OSD:
-                - Has a StationXML file
-                - 1 Waveform Tag(s):
-                    raw_recording
+        Example:
+            >>> ds.waveforms.UW_OSD
+            Contents of the data set for station UW.OSD:
+            - Has a StationXML file
+            - 1 Waveform Tag(s):
+                raw_recording
         """
         p.text(self.__str__())
+
 
 class DatalessWaveformAccessor(WaveformAccessor):
     def __init__(self, station_name, data_set):
         self.station_name = station_name
         self.data_set = data_set
-        self.waveform_dict = self.data_set().ASDFDict['Waveforms'][station_name]
+        self.waveform_dict = self.data_set().ASDFDict["Waveforms"][station_name]
 
     def __iter__(self):
         content = super()._waveform_content()
@@ -588,16 +605,18 @@ class DatalessWaveformAccessor(WaveformAccessor):
             t.stats.npts = c[7]
 
             try:
-                starttime = datetime.datetime.strptime(c[4][:26], "%Y-%m-%dT%H:%M:%S.%f")
+                starttime = datetime.datetime.strptime(
+                    c[4][:26], "%Y-%m-%dT%H:%M:%S.%f"
+                )
                 endtime = datetime.datetime.strptime(c[5][:26], "%Y-%m-%dT%H:%M:%S.%f")
             except:
                 starttime = datetime.datetime.strptime(c[4], "%Y-%m-%dT%H:%M:%S")
                 endtime = datetime.datetime.strptime(c[5], "%Y-%m-%dT%H:%M:%S")
             delta = (endtime - starttime).total_seconds()
-            sampling_rate = (c[7]-1)/delta
+            sampling_rate = (c[7] - 1) / delta
 
             setattr(t.stats, "tag", c[6])
-            #setattr(t.stats, "delta", delta.total_seconds())
+            # setattr(t.stats, "delta", delta.total_seconds())
             setattr(t.stats, "starttime", starttime)
             setattr(t.stats, "sampling_rate", sampling_rate)
             setattr(t.stats, "network", c[0])
@@ -607,12 +626,13 @@ class DatalessWaveformAccessor(WaveformAccessor):
 
             yield t
 
+
 class AuxiliaryDataGroupAccessor(object):
     def __init__(self, data_set):
         # Use weak references to not have any dangling references to the HDF5
         # file around.
         self.data_set = weakref.ref(data_set)
-        self.auxiliarydata_dict = self.data_set().ASDFDict['AuxiliaryData']
+        self.auxiliarydata_dict = self.data_set().ASDFDict["AuxiliaryData"]
 
     def list(self):
         return sorted(self.auxiliarydata_dict.keys())

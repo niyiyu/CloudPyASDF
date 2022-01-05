@@ -8,7 +8,7 @@
 # License:
 #    BSD 3-Clause ("BSD New" or "BSD Simplified")
 #    TODO: Perhaps authority required from Lion.
-# 
+#
 from __future__ import (
     absolute_import,
     division,
@@ -41,9 +41,7 @@ def merge_inventories(inv_a, inv_b, network_id, station_id):
     """
     inv = copy.deepcopy(inv_a)
     inv.networks.extend(copy.deepcopy(inv_b.networks))
-    return isolate_and_merge_station(
-        inv, network_id=network_id, station_id=station_id
-    )
+    return isolate_and_merge_station(inv, network_id=network_id, station_id=station_id)
 
 
 def isolate_and_merge_station(inv, network_id, station_id):
@@ -82,10 +80,7 @@ def isolate_and_merge_station(inv, network_id, station_id):
                 ):
                     network.start_date = other_network.start_date
             # None is the "biggest" end_date.
-            if (
-                network.end_date is not None
-                and other_network.end_date is not None
-            ):
+            if network.end_date is not None and other_network.end_date is not None:
                 if other_network.end_date > network.end_date:
                     network.end_date = other_network.end_date
             elif other_network.end_date is None:
@@ -151,10 +146,7 @@ def isolate_and_merge_station(inv, network_id, station_id):
                 # start date from the new station is earlier than the existing
                 # start date or if there is no existing start date.
                 if new_station.start_date is not None:
-                    if (
-                        s.start_date is None
-                        or s.start_date > new_station.start_date
-                    ):
+                    if s.start_date is None or s.start_date > new_station.start_date:
                         s.start_date = new_station.start_date
                 # None is the "biggest" end_date.
                 if s.end_date is not None and new_station.end_date is not None:
@@ -294,13 +286,9 @@ def get_coordinates(data, level="station"):
                     elif child.tag == longitude_tag:
                         channel_coordinates["longitude"] = float(child.text)
                     elif child.tag == elevation_tag:
-                        channel_coordinates["elevation_in_m"] = float(
-                            child.text
-                        )
+                        channel_coordinates["elevation_in_m"] = float(child.text)
                     elif child.tag == depth_tag:
-                        channel_coordinates["local_depth_in_m"] = float(
-                            child.text
-                        )
+                        channel_coordinates["local_depth_in_m"] = float(child.text)
             elif elem.tag == station_tag:
                 sta_state = elem.get("code")
             elif elem.tag == network_tag:
